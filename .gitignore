@@ -93,3 +93,9 @@ venv/
 ENV/
 env/
 mi_entorno/
+
+
+# Archivos de base de datos en el directorio data/db
+data/db/*.db
+data/db/*.sqlite
+data/db/*.sqlite3
