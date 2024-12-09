@@ -11,7 +11,7 @@ from contextlib import contextmanager
 # - check_same_thread=False: Permite acceso desde múltiples hilos (necesario para FastAPI)
 # - isolation_level="AUTOCOMMIT": Comentado, pero permitiría auto-commit en cada operación
 engine = create_engine(
-    "sqlite:///./test.db", 
+    "sqlite:///./data/db/test.db", 
     connect_args={"check_same_thread": False},
     #isolation_level="AUTOCOMMIT"
     )
