@@ -1,12 +1,16 @@
+# routes/user.py
+
+# Importamos las librerías necesarias
 from fastapi import APIRouter, HTTPException, status
 from config.db import get_db
 from models.user import users  # users es la tabla de la base de datos
 from schemas.user import User, UserCreate, UserUpdate  # Clase User
-from cryptography.fernet import Fernet  # Para encriptar la contraseña
+from passlib.context import CryptContext  # Para bcrypt
 from sqlalchemy.exc import SQLAlchemyError  # Para manejar errores de la base de datos
 
-key = Fernet.generate_key()
-f = Fernet(key)
+
+# Configurar bcrypt
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 user = APIRouter()
 
@@ -22,7 +26,7 @@ def create_user(user: UserCreate):
         new_user = {"name": user.name, "email": user.email, "password": user.password}
 
         # Encriptar la contraseña
-        new_user["password"] = f.encrypt(user.password.encode("utf-8"))
+        new_user["password"] = pwd_context.hash(user.password)
 
         # Usar context manager para manejar la conexión
         with get_db() as db:
@@ -170,9 +174,7 @@ def update_user(id: int, user_update: UserUpdate):
 
             # Encriptamos la contraseña si se proporciona
             if "password" in update_data and update_data["password"]:
-                update_data["password"] = f.encrypt(
-                    update_data["password"].encode("utf-8")
-                )
+                update_data["password"] = pwd_context.hash(update_data["password"])
 
             # Ejecutamos la actualización
             result = db.execute(
@@ -182,7 +184,7 @@ def update_user(id: int, user_update: UserUpdate):
             # Retornamos el usuario actualizado
             return db.execute(users.select().where(users.c.id == id)).first()
 
-    except SQLAlchemyError as e:        
+    except SQLAlchemyError as e:
         # Manejar errores específicos de la base de datos
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
