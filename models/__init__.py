@@ -1,3 +1,4 @@
+# models/__init__.py
 """
 Módulo de inicialización de modelos para la base de datos
 

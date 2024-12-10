@@ -8,7 +8,7 @@ galleries = Table(
     meta,
     Column("id", Integer, primary_key=True),
     Column("name", String(255)),
-    Column("description", Text),
-    Column("session_id", Integer, ForeignKey("sessions.id")),
+    Column("description", Text),    
     Column("client_id", Integer, ForeignKey("users.id"))
 )
+
