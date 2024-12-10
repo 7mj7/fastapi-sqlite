@@ -10,7 +10,7 @@ ENV\Scripts\activate
 ```
 # En macOS/Linux:
 ```console
-source ENV/Scripts/activate
+source ENV/bin/activate
 ```
 
 # 3. Desactivar el entorno
