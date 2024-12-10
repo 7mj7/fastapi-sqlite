@@ -9,5 +9,5 @@ photos = Table(
     Column("id", Integer, primary_key=True),
     Column("filename", String(255)),
     Column("path", String(255)),
-    Column("gallery_id", Integer, ForeignKey("galleries.id")),    
+    Column("session_id", Integer, ForeignKey("sessions.id")),  
 )

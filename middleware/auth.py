@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from config.security import verify_token
 from config.db import get_db
 from models.user import users
+from sqlalchemy import select
 
 # Configurar el esquema OAuth2 con la ruta del endpoint de autenticación
 # tokenUrl="token" indica que el endpoint para obtener el token está en /token
@@ -33,13 +34,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         
     # Buscar el usuario en la base de datos usando el email
     with get_db() as db:
-        user = db.execute(
-            users.select().where(users.c.email == email)
-        ).first()
+        query = select(users).where(users.c.email == email)
+        user = db.execute(query).mappings().first() # Usar .mappings() para obtener un diccionario
 
         # Si el usuario no existe, lanzar excepción
         if user is None:
             raise credentials_exception
         
         # Retornar los datos del usuario si todo es correcto
-        return user
+        return dict(user)  # Convertir el objeto User en un diccionario 
