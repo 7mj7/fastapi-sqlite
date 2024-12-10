@@ -2,7 +2,7 @@
 
 from sqlalchemy import Table, Column, Integer, ForeignKey, Boolean, DateTime
 from sqlalchemy.sql import func
-from . import meta  # Asegúrate de importar correctamente tu metadata o Base
+from config.db import meta  # Asegúrate de importar correctamente tu metadata o Base
 
 # Tabla de asociación entre galerías y fotografías con atributos adicionales
 gallery_photos = Table(

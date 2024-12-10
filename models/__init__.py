@@ -20,6 +20,7 @@ from .user import users
 from .session import sessions
 from .gallery import galleries
 from .photo import photos
+from .gallery_photos import gallery_photos
 
 # Importación de dependencias para crear las tablas
 from config.db import engine, meta
@@ -29,4 +30,4 @@ from config.db import engine, meta
 meta.create_all(engine)
 
 # Exportar los modelos para facilitar su importación
-__all__ = ['users', 'sessions', 'galleries', 'photos']
+__all__ = ['users', 'sessions', 'galleries', 'photos', 'gallery_photos']
