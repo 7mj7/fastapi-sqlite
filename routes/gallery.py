@@ -10,9 +10,9 @@ from models.gallery import galleries
 from models.gallery_photos import gallery_photos
 from models.photo import photos
 
-from schemas.gallery import Gallery, GalleryCreate, GalleryWithPhotos
+from schemas.gallery import Gallery, GalleryCreate, GalleryWithPhotos, PhotoInGallery
 
-from sqlalchemy import select, join
+from sqlalchemy import select, join, and_
 
 # Crear router con tag para la documentación
 gallery = APIRouter(tags=["galleries"])
@@ -322,4 +322,138 @@ async def delete_gallery(id: int, current_user=Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al eliminar la galería: {str(e)}",
+        )
+
+# -------------------------------------------------------------------
+# Endpoint para marcar/desmarcar fotos como seleccionadas en una galería
+# PUT /galleries/{gallery_id}/photos/{photo_id}/select
+# 
+# Parámetros:
+#   - gallery_id (int): ID de la galería
+#   - photo_id (int): ID de la foto
+#   - current_user: Usuario autenticado actual
+# 
+# Respuestas:
+#   - 200: Foto actualizada correctamente
+#   - 404: Galería o foto no encontrada
+#   - 500: Error interno del servidor
+# 
+# Verifica:
+#   - Que la galería existe
+#   - Que el cliente tiene acceso a la galería
+#   - Que la foto existe en la galería
+# -------------------------------------------------------------------
+@gallery.put("/galleries/{gallery_id}/photos/{photo_id}/select",
+    response_model=PhotoInGallery,
+        responses={
+        200: {"description": "Foto actualizada correctamente"},
+        403: {"description": "No tienes permiso para acceder a esta galería"},
+        404: {"description": "Galería o foto no encontrada"},
+        500: {"description": "Error interno del servidor"}
+    }
+    status_code=status.HTTP_200_OK,
+    summary="Marcar/desmarcar foto como seleccionada",
+    description="Permite a un cliente marcar o desmarcar una foto como seleccionada para el álbum"
+)
+async def toggle_photo_selection(
+    gallery_id: int,
+    photo_id: int,
+    current_user=Depends(get_current_user)
+):
+    try:
+        print(f"\n=== Iniciando toggle_photo_selection ===")
+        print(f"Gallery ID: {gallery_id}")
+        print(f"Photo ID: {photo_id}")
+        print(f"Usuario: {current_user['name']} (ID: {current_user['id']})")
+    
+        with get_db() as db:
+            # Verificar que la galería existe y pertenece al cliente
+            print("\n🔍 Verificando acceso a la galería...")
+            gallery = db.execute(
+                galleries.select().where(
+                    and_(
+                        galleries.c.id == gallery_id,
+                        galleries.c.client_id == current_user['id']
+                    )
+                )
+            ).first()
+            
+            if not gallery:
+                print("❌ Galería no encontrada o acceso denegado")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Galería no encontrada o no tienes acceso"
+                )
+            print("✅ Acceso a galería verificado")
+
+            # Obtener la foto de la galería
+            print("\n🔍 Buscando foto en la galería...")
+            gallery_photo = db.execute(
+                gallery_photos.select().where(
+                    and_(
+                        gallery_photos.c.gallery_id == gallery_id,
+                        gallery_photos.c.photo_id == photo_id
+                    )
+                )
+            ).first()
+
+            if not gallery_photo:
+                print("❌ Foto no encontrada en la galería")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Foto no encontrada en la galería"
+                )
+            print("✅ Foto encontrada")
+
+            # Cambiar el estado de selección (toggle)
+            new_selected_state = not gallery_photo.selected
+            print(f"\n🔄 Cambiando estado de selección a: {new_selected_state}")
+
+            # Actualizar el estado de selección
+            db.execute(
+                gallery_photos.update()
+                .where(
+                    and_(
+                        gallery_photos.c.gallery_id == gallery_id,
+                        gallery_photos.c.photo_id == photo_id
+                    )
+                )
+                .values(selected=new_selected_state)
+            )
+            print("✅ Estado actualizado correctamente")
+
+            # Obtener la foto actualizada
+            print("\n🔍 Obteniendo datos actualizados...")
+            updated_photo = db.execute(
+                select(
+                    gallery_photos.c.id.label('gallery_photo_id'),
+                    gallery_photos.c.gallery_id,
+                    gallery_photos.c.photo_id,
+                    photos.c.description,
+                    photos.c.path,
+                    gallery_photos.c.selected,
+                    gallery_photos.c.favorite
+                )
+                .select_from(
+                    join(photos, gallery_photos, 
+                         photos.c.id == gallery_photos.c.photo_id)
+                )
+                .where(
+                    and_(
+                        gallery_photos.c.gallery_id == gallery_id,
+                        gallery_photos.c.photo_id == photo_id
+                    )
+                )
+            ).first()
+
+            print("✅ Datos actualizados obtenidos")            
+            print("\n=== Operación completada con éxito ===")
+
+            return updated_photo
+
+    except SQLAlchemyError as e:
+        print(f"\n❌ Error de base de datos: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al actualizar la selección de la foto: {str(e)}"
         )
