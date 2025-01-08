@@ -2,11 +2,17 @@
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from config.db import get_db
-from models.gallery import galleries
-from models.user import UserRole  # Importar el enum de roles
-from schemas.gallery import Gallery, GalleryCreate
 from sqlalchemy.exc import SQLAlchemyError
 from middleware.auth import get_current_user
+
+from models.user import UserRole  # Importar el enum de roles
+from models.gallery import galleries
+from models.gallery_photos import gallery_photos
+from models.photo import photos
+
+from schemas.gallery import Gallery, GalleryCreate, GalleryWithPhotos
+
+from sqlalchemy import select, join
 
 # Crear router con tag para la documentación
 gallery = APIRouter(tags=["galleries"])
@@ -125,7 +131,6 @@ async def get_my_galleries(current_user=Depends(get_current_user)):
         )
 
 
-'''TODO: MODIFICAR PARA QUE DEVUELVA LAS FOTOS DE LA GALERIA'''
 # -------------------------------------------------------------------
 # Endpoint para obtener una galería específica por ID
 # GET /galleries/{id}
@@ -133,19 +138,20 @@ async def get_my_galleries(current_user=Depends(get_current_user)):
 # -------------------------------------------------------------------
 @gallery.get(
     "/galleries/{id}",
-    response_model=Gallery,
+    # response_model=Gallery,
+    response_model=GalleryWithPhotos,  # Actualizar el modelo de respuesta
     responses={
         403: {"description": "Acceso denegado"},
         404: {"description": "Galería no encontrada"},
         500: {"description": "Error interno del servidor"},
     },
-    summary="Obtener galería por ID",
-    description="Obtiene una galería específica. El usuario debe ser el fotógrafo o cliente.",
+    summary="Obtener galería por ID con sus fotos",
+    description="Obtiene una galería específica con sus fotos asociadas. El usuario debe ser el fotógrafo o cliente.",
 )
 async def get_gallery(id: int, current_user=Depends(get_current_user)):
     try:
         with get_db() as db:
-            # Verificamos si existe la galería
+            # Consulta para obtener la galería
             gallery = db.execute(galleries.select().where(galleries.c.id == id)).first()
 
             if not gallery:
@@ -156,12 +162,10 @@ async def get_gallery(id: int, current_user=Depends(get_current_user)):
 
             # Control de acceso basado en roles
             if current_user["role"] == UserRole.admin:
-                # Los administradores pueden ver cualquier galería
                 print(f"👑 Admin consultando galería {id}")
-                return gallery
 
             elif current_user["role"] == UserRole.photographer:
-                # Los fotógrafos solo pueden ver sus propias galerías
+                # Verificar que el fotógrafo tenga acceso a la galería
                 if gallery.photographer_id != current_user["id"]:
                     print(
                         f"❌ Fotógrafo {current_user['id']} intentó acceder a galería {id} que no le pertenece"
@@ -171,18 +175,88 @@ async def get_gallery(id: int, current_user=Depends(get_current_user)):
                         detail="No tienes permiso para ver esta galería",
                     )
                 print(f"📸 Fotógrafo {current_user['id']} consultando su galería {id}")
-                return gallery
-            
+
             elif current_user["role"] == UserRole.client:
-                # Los clientes solo pueden ver las galerías asignadas a ellos
+                # Verificar que el cliente tenga acceso a la galería
                 if gallery.client_id != current_user["id"]:
-                    print(f"❌ Cliente {current_user['id']} intentó acceder a galería {id} no asignada")
+                    print(
+                        f"❌ Cliente {current_user['id']} intentó acceder a galería {id} no asignada"
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="No tienes permiso para ver esta galería"
+                        detail="No tienes permiso para ver esta galería",
                     )
                 print(f"👤 Cliente {current_user['id']} consultando su galería {id}")
-                return gallery
+
+            # Consulta SQLAlchemy para obtener las fotos de la galería
+            query = (
+                select(
+                    gallery_photos.c.id,  # ID de la relación gallery_photos
+                    gallery_photos.c.gallery_id,  # ID de la galería
+                    gallery_photos.c.photo_id,  # ID de la foto
+                    photos.c.description,  # Descripción de la foto
+                    photos.c.path,  # Ruta de la foto
+                    gallery_photos.c.selected,  # Estado de selección
+                    gallery_photos.c.favorite,  # Estado de favorito
+                )
+                .select_from(
+                    join(
+                        photos, gallery_photos, photos.c.id == gallery_photos.c.photo_id
+                    )
+                )
+                .where(gallery_photos.c.gallery_id == id)
+            )
+
+            '''print("\n=== SQL Query ===")
+            print(str(query))'''
+
+            gallery_photos_result = db.execute(query).fetchall()
+
+            """print("\n=== Resultados de la consulta ===")
+            for row in gallery_photos_result:
+                print(row)"""
+
+            # Crear el diccionario de respuesta
+            response = {
+                "id": gallery.id,
+                "name": gallery.name,
+                "description": gallery.description,
+                "photographer_id": gallery.photographer_id,
+                "client_id": gallery.client_id,
+                "photos": [
+                    {
+                        "gallery_photo_id": photo.id,
+                        "photo_id": photo.photo_id,
+                        "description": photo.description,
+                        "path": photo.path,
+                        "selected": photo.selected,
+                        "favorite": photo.favorite
+                    }
+                    for photo in gallery_photos_result
+                ]
+            }
+
+            return response
+
+            """
+            EQUIVALENTE EN SQL : 
+            SELECT 
+                gallery_photos.id,         -- ID de la relación gallery_photos
+                photos.id as photo_id,     -- ID de la foto
+                photos.description,        -- Descripción de la foto
+                photos.path,              -- Ruta de la foto
+                photos.session_id,        -- ID de la sesión
+                gallery_photos.selected,   -- Estado de selección
+                gallery_photos.favorite    -- Estado de favorito
+            FROM 
+                photos
+            INNER JOIN 
+                gallery_photos
+            ON 
+                photos.id = gallery_photos.photo_id
+            WHERE 
+                gallery_photos.gallery_id = [id];
+            """
 
             """gallery = db.execute(galleries.select().where(galleries.c.id == id)).first()
 
