@@ -75,6 +75,46 @@ def init_db():
                         "password": get_password_hash("cliente123"),
                         "role": "client",
                         "photographer_id": 2  # Cliente asignado al fotógrafo (ID 2)
+                    },
+                    {
+                        "id": 4,
+                        "name": "Cliente 4",
+                        "email": "cliente4@example.com",
+                        "password": get_password_hash("cliente123"),
+                        "role": "client",
+                        "photographer_id": 2  # Cliente asignado al fotógrafo (ID 2)
+                    },
+                    {
+                        "id": 5,
+                        "name": "Cliente 5",
+                        "email": "cliente5@example.com",
+                        "password": get_password_hash("cliente123"),
+                        "role": "client",
+                        "photographer_id": 2  # Cliente asignado al fotógrafo (ID 2)
+                    },
+                    {
+                        "id": 6,
+                        "name": "Fotógrafo 6",
+                        "email": "fotografo6@example.com",
+                        "password": get_password_hash("foto123"),
+                        "role": "photographer",
+                        "photographer_id": None  # Fotógrafo no tiene fotógrafo asignado
+                    },
+                    {
+                        "id": 7,
+                        "name": "Cliente 7",
+                        "email": "cliente7@example.com",
+                        "password": get_password_hash("cliente123"),
+                        "role": "client",
+                        "photographer_id": 6  # Cliente asignado al fotógrafo (ID 6)
+                    },
+                    {
+                        "id": 8,
+                        "name": "Cliente 8",
+                        "email": "cliente8@example.com",
+                        "password": get_password_hash("cliente123"),
+                        "role": "client",
+                        "photographer_id": 6  # Cliente asignado al fotógrafo (ID 6)
                     }
                 ]
                 
