@@ -128,13 +128,45 @@ def get_users(current_user=Depends(get_current_user)):
     response_model=User,
     responses={
         404: {"description": "Usuario no encontrado"},
+        403: {"description": "Acceso denegado"},
         500: {"description": "Error interno del servidor"},
     },
 )
 def get_user(id: int, current_user=Depends(get_current_user)):
     try:
         with get_db() as db:
-            # Ejecutamos la consulta
+            # Si es admin, puede ver cualquier usuario
+            if current_user["role"] == UserRole.admin:
+                user = db.execute(users.select().where(users.c.id == id)).first()
+                if not user:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Usuario con id {id} no encontrado",
+                    )
+                return user
+
+            # Si es fotógrafo, solo puede ver sus clientes
+            elif current_user["role"] == UserRole.photographer:
+                user = db.execute(
+                    users.select().where(
+                        users.c.id == id, users.c.photographer_id == current_user["id"]
+                    )
+                ).first()
+                if not user:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="No tienes permiso para ver este usuario",
+                    )
+                return user
+
+            # Si es cliente, no tiene acceso a ver otros usuarios
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Los clientes no tienen permiso para ver usuarios",
+                )
+
+            """# Ejecutamos la consulta
             user = db.execute(users.select().where(users.c.id == id)).first()
             if not user:
                 raise HTTPException(
@@ -142,7 +174,7 @@ def get_user(id: int, current_user=Depends(get_current_user)):
                     detail=f"Usuario con id {id} no encontrado",
                 )
 
-            return user
+            return user"""
 
     except SQLAlchemyError as e:
         # Manejar errores específicos de la base de datos
@@ -175,6 +207,7 @@ def get_user(id: int, current_user=Depends(get_current_user)):
     "/users/{id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
+        403: {"description": "Acceso denegado"},
         404: {"description": "Usuario no encontrado"},
         500: {"description": "Error interno del servidor"},
     },
@@ -182,7 +215,50 @@ def get_user(id: int, current_user=Depends(get_current_user)):
 def delete_user(id: int, current_user=Depends(get_current_user)):
     try:
         with get_db() as db:
-            # Verificamos si existe el usuario
+             # Verificamos si existe el usuario a eliminar
+            user_to_delete = db.execute(users.select().where(users.c.id == id)).first()
+
+             # Control de acceso basado en roles
+            if current_user["role"] == UserRole.admin:
+                # Los administradores pueden eliminar cualquier usuario
+                if not user_to_delete:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Usuario con id {id} no encontrado"
+                    )
+                db.execute(users.delete().where(users.c.id == id))
+                return None
+            
+            elif current_user["role"] == UserRole.photographer:
+                # Los fotógrafos solo pueden eliminar sus clientes
+                if not user_to_delete:
+                    print(f"❌ No tienes permiso para eliminar este usuario {id}")
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="El usuario no existe o no puedes eliminarlo"                        
+                    )
+                
+                if user_to_delete["photographer_id"] != current_user["id"]:
+                    print(f"❌ El cliente {id} no pertenede a tu usuario {current_user['id']}")
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="El usuario no existe o no puedes eliminarlo"                        
+                    )
+                
+                db.execute(users.delete().where(users.c.id == id))
+                return None
+            
+            else:
+                # Los clientes no pueden eliminar usuarios
+                print(f"❌ Un cliente no puede eliminar usuarios")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="No tienes permiso para eliminar usuarios"                    
+                )
+
+
+
+            '''# Verificamos si existe el usuario
             user = db.execute(users.select().where(users.c.id == id)).first()
             if not user:
                 raise HTTPException(
@@ -193,7 +269,7 @@ def delete_user(id: int, current_user=Depends(get_current_user)):
             # Ejecutamos la eliminación
             db.execute(users.delete().where(users.c.id == id))
 
-            return None  # 204 No Content no devuelve body
+            return None  # 204 No Content no devuelve body'''
 
     except SQLAlchemyError as e:
         # Manejar errores específicos de la base de datos
@@ -233,18 +309,50 @@ def update_user(
 ):
     try:
         with get_db() as db:
-            # Verificamos si existe el usuario
+            # Verificamos si existe el usuario a actualizar
+            existing_user = db.execute(users.select().where(users.c.id == id)).first()
+            if not existing_user:
+                print(f"❌ Usuario {id} no encontrado")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Usuario no encontrado"
+                )
+            
+            # Control de acceso basado en roles
+            if current_user["role"] == UserRole.admin:
+                # Los administradores pueden actualizar cualquier usuario
+                print(f"✅ Admin con id {current_user['id']}  actualizando usuario con id {id}")
+            
+            elif current_user["role"] == UserRole.photographer:
+                # Los fotógrafos solo pueden actualizar sus clientes
+                if existing_user["photographer_id"] != current_user["id"]:
+                    print(f"❌ Fotógrafo {current_user['id']} intentó actualizar usuario {id} que no le pertenece")
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Solo puedes actualizar tus propios clientes"
+                    )
+                print(f"✅ Fotógrafo {current_user['id']} actualizando su cliente {id}")
+            
+            else:
+                # Los clientes no pueden actualizar usuarios
+                print(f"❌ Cliente {current_user['id']} intentó actualizar usuario {id}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Los clientes no tienen permiso para actualizar usuarios"
+                )
+
+
+            '''# Verificamos si existe el usuario
             existing_user = db.execute(users.select().where(users.c.id == id)).first()
             if not existing_user:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Usuario con id {id} no encontrado",
                 )
-
-            # Preparamos los datos actualizados
-            update_data = user_update.model_dump(
-                exclude_unset=True
-            )  # Solo incluye campos proporcionados
+            '''
+            
+             # Preparamos los datos actualizados (Solo incluye campos proporcionados)
+            update_data = user_update.model_dump(exclude_unset=True)
 
             # Encriptamos la contraseña si se proporciona
             if "password" in update_data and update_data["password"]:
@@ -256,9 +364,11 @@ def update_user(
             )
 
             # Retornamos el usuario actualizado
-            return db.execute(users.select().where(users.c.id == id)).first()
+            updated_user = db.execute(users.select().where(users.c.id == id)).first()
+            return updated_user
 
     except SQLAlchemyError as e:
+        print(f"❌ Error en la base de datos: {str(e)}")
         # Manejar errores específicos de la base de datos
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

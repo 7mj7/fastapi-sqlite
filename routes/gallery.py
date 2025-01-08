@@ -75,18 +75,48 @@ async def create_gallery(
     "/galleries/me/",
     response_model=list[Gallery],
     summary="Obtener mis galerías",
-    description="Retorna las galerías donde el usuario es fotógrafo o cliente.",
+    description="Retorna las galerías según el rol del usuario.",
+    responses={
+        403: {"description": "Acceso denegado"},
+        500: {"description": "Error interno del servidor"},
+    },
 )
 async def get_my_galleries(current_user=Depends(get_current_user)):
     try:
         with get_db() as db:
-            galleries_list = db.execute(
+            # Si es admin, mostrar todas las galerías
+            if current_user["role"] == UserRole.admin:
+                print(f"👑 Admin consultando todas las galerías")
+                galleries_list = db.execute(galleries.select()).fetchall()
+                return galleries_list
+
+            # Si es fotógrafo, mostrar solo sus galerías
+            elif current_user["role"] == UserRole.photographer:
+                print(f"📸 Fotógrafo {current_user['id']} consultando sus galerías")
+                galleries_list = db.execute(
+                    galleries.select().where(
+                        galleries.c.photographer_id == current_user["id"]
+                    )
+                ).fetchall()
+                return galleries_list
+
+            # Si es cliente, mostrar solo las galerías donde es el cliente
+            elif current_user["role"] == UserRole.client:
+                print(f"👤 Cliente {current_user['id']} consultando sus galerías")
+                galleries_list = db.execute(
+                    galleries.select().where(
+                        galleries.c.client_id == current_user["id"]
+                    )
+                ).fetchall()
+                return galleries_list
+
+            """galleries_list = db.execute(
                 galleries.select().where(
                     (galleries.c.photographer_id == current_user["id"])
                     | (galleries.c.client_id == current_user["id"])
                 )
             ).fetchall()
-            return galleries_list
+            return galleries_list"""
 
     except SQLAlchemyError as e:
         raise HTTPException(
@@ -95,6 +125,7 @@ async def get_my_galleries(current_user=Depends(get_current_user)):
         )
 
 
+'''TODO: MODIFICAR PARA QUE DEVUELVA LAS FOTOS DE LA GALERIA'''
 # -------------------------------------------------------------------
 # Endpoint para obtener una galería específica por ID
 # GET /galleries/{id}
@@ -103,14 +134,57 @@ async def get_my_galleries(current_user=Depends(get_current_user)):
 @gallery.get(
     "/galleries/{id}",
     response_model=Gallery,
-    responses={404: {"description": "Galería no encontrada"}},
+    responses={
+        403: {"description": "Acceso denegado"},
+        404: {"description": "Galería no encontrada"},
+        500: {"description": "Error interno del servidor"},
+    },
     summary="Obtener galería por ID",
     description="Obtiene una galería específica. El usuario debe ser el fotógrafo o cliente.",
 )
 async def get_gallery(id: int, current_user=Depends(get_current_user)):
     try:
         with get_db() as db:
+            # Verificamos si existe la galería
             gallery = db.execute(galleries.select().where(galleries.c.id == id)).first()
+
+            if not gallery:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Galería con id {id} no encontrada",
+                )
+
+            # Control de acceso basado en roles
+            if current_user["role"] == UserRole.admin:
+                # Los administradores pueden ver cualquier galería
+                print(f"👑 Admin consultando galería {id}")
+                return gallery
+
+            elif current_user["role"] == UserRole.photographer:
+                # Los fotógrafos solo pueden ver sus propias galerías
+                if gallery.photographer_id != current_user["id"]:
+                    print(
+                        f"❌ Fotógrafo {current_user['id']} intentó acceder a galería {id} que no le pertenece"
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="No tienes permiso para ver esta galería",
+                    )
+                print(f"📸 Fotógrafo {current_user['id']} consultando su galería {id}")
+                return gallery
+            
+            elif current_user["role"] == UserRole.client:
+                # Los clientes solo pueden ver las galerías asignadas a ellos
+                if gallery.client_id != current_user["id"]:
+                    print(f"❌ Cliente {current_user['id']} intentó acceder a galería {id} no asignada")
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="No tienes permiso para ver esta galería"
+                    )
+                print(f"👤 Cliente {current_user['id']} consultando su galería {id}")
+                return gallery
+
+            """gallery = db.execute(galleries.select().where(galleries.c.id == id)).first()
 
             if not gallery:
                 raise HTTPException(
@@ -128,7 +202,7 @@ async def get_gallery(id: int, current_user=Depends(get_current_user)):
                     detail="No tiene permiso para ver esta galería",
                 )
 
-            return gallery
+            return gallery"""
 
     except SQLAlchemyError as e:
         raise HTTPException(

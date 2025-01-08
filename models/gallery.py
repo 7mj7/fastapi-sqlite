@@ -6,7 +6,7 @@ from config.db import meta
 galleries = Table(
     "galleries",
     meta,
-    Column("id", Integer, primary_key=True),
+    Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String(255)),
     Column("description", Text),    
     Column("photographer_id", Integer, ForeignKey("users.id")), # Relación con el fotógrafo

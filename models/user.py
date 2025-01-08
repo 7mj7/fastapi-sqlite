@@ -21,7 +21,7 @@ class UserRole(enum.Enum):
 users = Table(
     "users",
     meta,
-    Column("id", Integer, primary_key=True),
+    Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String(255), nullable=False),
     Column("email", String(255), unique=True, nullable=False),  # Email debe ser unico
     Column("password", String(255), nullable=False),
