@@ -4,6 +4,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from config.db import get_db
 from models.user import users  # users es la tabla de la base de datos
+from models.user import UserRole  # Importar el enum de roles
 from schemas.user import User, UserCreate, UserUpdate  # Clase User
 from passlib.context import CryptContext  # Para bcrypt
 from sqlalchemy.exc import SQLAlchemyError  # Para manejar errores de la base de datos
@@ -20,11 +21,7 @@ user = APIRouter(tags=["users"])
 # Endpoint para crear un nuevo usuario. Recibe los datos del usuario,
 # encripta la contraseña y devuelve el usuario creado con su ID
 # -------------------------------------------------------------------
-@user.post(
-        "/users/", 
-        response_model=User, 
-        status_code=status.HTTP_201_CREATED
-)
+@user.post("/users/", response_model=User, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, current_user=Depends(get_current_user)):
     try:
         # Preparar los datos del nuevo usuario
@@ -66,14 +63,14 @@ def create_user(user: UserCreate, current_user=Depends(get_current_user)):
 # Seguridad: Requiere token JWT válido
 # -------------------------------------------------------------------
 @user.get(
-        "/users/me", 
-        response_model=User,
-        summary="Obtener usuario actual",
-        description="Retorna la información del usuario autenticado actual.",
-        responses={
-            200: {"description": "Usuario autenticado encontrado"},
-            401: {"description": "No autenticado"}
-        }
+    "/users/me",
+    response_model=User,
+    summary="Obtener usuario actual",
+    description="Retorna la información del usuario autenticado actual.",
+    responses={
+        200: {"description": "Usuario autenticado encontrado"},
+        401: {"description": "No autenticado"},
+    },
 )
 # Inyecta el usuario actual usando el middleware get_current_user
 # Si el token es válido, current_user contendrá los datos del usuario
@@ -90,9 +87,30 @@ def read_users_me(current_user=Depends(get_current_user)):
 def get_users(current_user=Depends(get_current_user)):
     try:
         with get_db() as db:
-            # Ejecutamos la consulta
+            # Si es admin, mostrar todos los usuarios
+            if current_user["role"] == UserRole.admin:
+                result = db.execute(users.select()).fetchall()
+                return result
+
+            # Si es fotógrafo, mostrar solo sus clientes
+            elif current_user["role"] == UserRole.photographer:
+                result = db.execute(
+                    users.select().where(users.c.photographer_id == current_user["id"])
+                ).fetchall()
+                return result
+
+            # Si es cliente, denegar acceso
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Los clientes no tienen permiso para ver la lista de usuarios",
+                )
+
+            """
             result = db.execute(users.select()).fetchall()
             return result
+            """
+
     except SQLAlchemyError as e:
         # Manejar errores específicos de la base de datos
         raise HTTPException(
@@ -142,15 +160,15 @@ def get_user(id: int, current_user=Depends(get_current_user)):
 # -------------------------------------------------------------------
 # Endpoint para eliminar un usuario por su ID
 # DELETE /users/{id}
-# 
+#
 # Parámetros:
 #   - id (int): ID del usuario a eliminar
-# 
+#
 # Respuestas:
 #   - 204: Usuario eliminado correctamente (sin contenido)
 #   - 404: Usuario no encontrado
 #   - 500: Error interno del servidor
-# 
+#
 # Requiere autenticación: Sí
 # -------------------------------------------------------------------
 @user.delete(
@@ -188,31 +206,31 @@ def delete_user(id: int, current_user=Depends(get_current_user)):
 # -------------------------------------------------------------------
 # Endpoint para actualizar un usuario por su ID
 # PUT /users/{id}
-# 
+#
 # Parámetros:
 #   - id (int): ID del usuario a actualizar
 #   - user_update (UserUpdate): Datos a actualizar
 #     - email (str, opcional): Nuevo email
 #     - password (str, opcional): Nueva contraseña
 #     - role (str, opcional): Rol del usuario
-# 
+#
 # Respuestas:
 #   - 200: Usuario actualizado correctamente (devuelve usuario actualizado)
 #   - 404: Usuario no encontrado
 #   - 401: No autorizado
 #   - 422: Error de validación en los datos
 #   - 500: Error interno del servidor
-# 
+#
 # Requiere autenticación: Sí
 # -------------------------------------------------------------------
 @user.put(
     "/users/{id}",
     response_model=User,
-    responses={
-        404: {"description": "Usuario no encontrado"}
-    },
+    responses={404: {"description": "Usuario no encontrado"}},
 )
-def update_user(id: int, user_update: UserUpdate, current_user=Depends(get_current_user)):
+def update_user(
+    id: int, user_update: UserUpdate, current_user=Depends(get_current_user)
+):
     try:
         with get_db() as db:
             # Verificamos si existe el usuario

@@ -16,6 +16,11 @@ gallery = APIRouter(tags=["galleries"])
 # Endpoint para crear una nueva galería
 # POST /galleries/
 # El usuario autenticado será automáticamente asignado como fotógrafo
+#
+# Ruta protegida por las siguientes razones:
+# 1. Solo usuarios autenticados pueden crear galerías (usa get_current_user)
+# 2. Solo fotógrafos pueden crear galerías (verifica rol)
+# 3. Asigna automáticamente el fotógrafo actual como propietario
 # -------------------------------------------------------------------
 @gallery.post(
     "/galleries/",

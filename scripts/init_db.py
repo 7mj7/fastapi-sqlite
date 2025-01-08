@@ -49,26 +49,39 @@ def init_db():
             if not result:
                 print("📝 Insertando usuarios de ejemplo...")
                 # Insertar usuarios de ejemplo
-                conn.execute(users.insert(), [
-                    {
+
+                 # Insertar usuarios de ejemplo con IDs específicos
+                usuarios = [
+                    {   
+                        "id": 1,                     
                         "name": "Admin",
                         "email": "admin@example.com",
                         "password": get_password_hash("admin123"),
-                        "role": "admin",                        
+                        "role": "admin",
+                        "photographer_id": None  # Admin no tiene fotógrafo asignado                      
                     },
                     {
+                        "id": 2,
                         "name": "Fotógrafo",
                         "email": "fotografo@example.com",
                         "password": get_password_hash("foto123"),
                         "role": "photographer",
+                        "photographer_id": None  # Fotógrafo no tiene fotógrafo asignado
                     },
                     {
+                        "id": 3,
                         "name": "Cliente",
                         "email": "cliente@example.com",
                         "password": get_password_hash("cliente123"),
                         "role": "client",
+                        "photographer_id": 2  # Cliente asignado al fotógrafo (ID 2)
                     }
-                ])
+                ]
+                
+                # Insertar usuarios uno por uno para mantener los IDs específicos
+                for usuario in usuarios:
+                    conn.execute(users.insert().values(usuario))
+                                    
                 # No necesitamos hacer commit explícito porque get_db lo maneja
                 print("✅ Usuarios de ejemplo creados correctamente")
             else:

@@ -2,7 +2,7 @@
 
 # Importa Table y Column de SQLAlchemy para definir la estructura de tablas y columnas en la base de datos.
 # Además, importa tipos de datos como Integer, String y Enum para especificar los tipos de las columnas.
-from sqlalchemy import Table, Column, Integer, String, Enum
+from sqlalchemy import Table, Column, Integer, String, Enum, ForeignKey
 
 # Importa 'meta' para la metadata de la base de datos
 from config.db import meta
@@ -27,4 +27,5 @@ users = Table(
     Column("password", String(255), nullable=False),
     # Column("role", String(50)),  # 'admin', 'photographer' o 'client'
     Column("role", Enum(UserRole), nullable=False, default=UserRole.photographer),  # Usar Enum para role
+    Column("photographer_id", Integer, ForeignKey("users.id"), nullable=True),      # ID del fotógrafo asociado
 )
