@@ -21,11 +21,42 @@ user = APIRouter(tags=["users"])
 # Endpoint para crear un nuevo usuario. Recibe los datos del usuario,
 # encripta la contraseña y devuelve el usuario creado con su ID
 # -------------------------------------------------------------------
-@user.post("/users/", response_model=User, status_code=status.HTTP_201_CREATED)
+@user.post(
+    "/users/",
+    response_model=User,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear un nuevo usuario",
+    description="Crear un nuevo usuario en el sistema.",
+    responses={
+        201: {"description": "Usuario creado correctamente"},
+        400: {"description": "Error en los datos proporcionados"},
+        403: {"description": "No autorizado - Rol insuficiente"},
+        500: {"description": "Error interno del servidor"},
+    },
+)
 def create_user(user: UserCreate, current_user=Depends(get_current_user)):
     try:
+        # Verificar permisos según rol :
+        # Si es admin, crear un fotógrafo
+        # Si es fotógrafo, crear un cliente
+        # Si es cliente, denegar
+        if current_user["role"] == UserRole.admin:
+            new_user_role = UserRole.photographer
+        elif current_user["role"] == UserRole.photographer:
+            new_user_role = UserRole.client
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para crear usuarios",
+            )
+
         # Preparar los datos del nuevo usuario
-        new_user = {"name": user.name, "email": user.email, "password": user.password}
+        new_user = {
+            "name": user.name,
+            "email": user.email,
+            "password": user.password,
+            "role": new_user_role,
+        }
 
         # Encriptar la contraseña
         new_user["password"] = pwd_context.hash(user.password)
@@ -83,7 +114,17 @@ def read_users_me(current_user=Depends(get_current_user)):
 # -------------------------------------------------------------------
 # Endpoint para obtener la lista de todos los usuarios registrados
 # -------------------------------------------------------------------
-@user.get("/users", response_model=list[User])
+@user.get(
+    "/users",
+    response_model=list[User],
+    summary="Obtener lista de usuarios",
+    description="Retorna la lista completa de usuarios registrados.",
+    responses={
+        200: {"description": "Lista de usuarios obtenida correctamente"},
+        403: {"description": "No autorizado - Rol insuficiente"},
+        500: {"description": "Error interno del servidor"},
+    }
+)
 def get_users(current_user=Depends(get_current_user)):
     try:
         with get_db() as db:
@@ -126,6 +167,8 @@ def get_users(current_user=Depends(get_current_user)):
 @user.get(
     "/users/{id}",
     response_model=User,
+    summary="Obtener usuario por ID",
+    description="Retorna la información de un usuario por su ID.",
     responses={
         404: {"description": "Usuario no encontrado"},
         403: {"description": "Acceso denegado"},
@@ -206,6 +249,8 @@ def get_user(id: int, current_user=Depends(get_current_user)):
 @user.delete(
     "/users/{id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar un usuario",
+    description="Elimina un usuario por su ID.",
     responses={
         403: {"description": "Acceso denegado"},
         404: {"description": "Usuario no encontrado"},
@@ -215,50 +260,50 @@ def get_user(id: int, current_user=Depends(get_current_user)):
 def delete_user(id: int, current_user=Depends(get_current_user)):
     try:
         with get_db() as db:
-             # Verificamos si existe el usuario a eliminar
+            # Verificamos si existe el usuario a eliminar
             user_to_delete = db.execute(users.select().where(users.c.id == id)).first()
 
-             # Control de acceso basado en roles
+            # Control de acceso basado en roles
             if current_user["role"] == UserRole.admin:
                 # Los administradores pueden eliminar cualquier usuario
                 if not user_to_delete:
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Usuario con id {id} no encontrado"
+                        detail=f"Usuario con id {id} no encontrado",
                     )
                 db.execute(users.delete().where(users.c.id == id))
                 return None
-            
+
             elif current_user["role"] == UserRole.photographer:
                 # Los fotógrafos solo pueden eliminar sus clientes
                 if not user_to_delete:
                     print(f"❌ No tienes permiso para eliminar este usuario {id}")
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="El usuario no existe o no puedes eliminarlo"                        
+                        detail="El usuario no existe o no puedes eliminarlo",
                     )
-                
+
                 if user_to_delete["photographer_id"] != current_user["id"]:
-                    print(f"❌ El cliente {id} no pertenede a tu usuario {current_user['id']}")
+                    print(
+                        f"❌ El cliente {id} no pertenede a tu usuario {current_user['id']}"
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="El usuario no existe o no puedes eliminarlo"                        
+                        detail="El usuario no existe o no puedes eliminarlo",
                     )
-                
+
                 db.execute(users.delete().where(users.c.id == id))
                 return None
-            
+
             else:
                 # Los clientes no pueden eliminar usuarios
                 print(f"❌ Un cliente no puede eliminar usuarios")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="No tienes permiso para eliminar usuarios"                    
+                    detail="No tienes permiso para eliminar usuarios",
                 )
 
-
-
-            '''# Verificamos si existe el usuario
+            """# Verificamos si existe el usuario
             user = db.execute(users.select().where(users.c.id == id)).first()
             if not user:
                 raise HTTPException(
@@ -269,7 +314,7 @@ def delete_user(id: int, current_user=Depends(get_current_user)):
             # Ejecutamos la eliminación
             db.execute(users.delete().where(users.c.id == id))
 
-            return None  # 204 No Content no devuelve body'''
+            return None  # 204 No Content no devuelve body"""
 
     except SQLAlchemyError as e:
         # Manejar errores específicos de la base de datos
@@ -302,6 +347,9 @@ def delete_user(id: int, current_user=Depends(get_current_user)):
 @user.put(
     "/users/{id}",
     response_model=User,
+    status_code=status.HTTP_200_OK,
+    summary="Actualizar un usuario",
+    description="Actualizar un usuario en el sistema.",
     responses={404: {"description": "Usuario no encontrado"}},
 )
 def update_user(
@@ -315,43 +363,48 @@ def update_user(
                 print(f"❌ Usuario {id} no encontrado")
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Usuario no encontrado"
+                    detail="Usuario no encontrado",
                 )
-            
+
             # Control de acceso basado en roles
             if current_user["role"] == UserRole.admin:
                 # Los administradores pueden actualizar cualquier usuario
-                print(f"✅ Admin con id {current_user['id']}  actualizando usuario con id {id}")
-            
+                print(
+                    f"✅ Admin con id {current_user['id']}  actualizando usuario con id {id}"
+                )
+
             elif current_user["role"] == UserRole.photographer:
                 # Los fotógrafos solo pueden actualizar sus clientes
                 if existing_user["photographer_id"] != current_user["id"]:
-                    print(f"❌ Fotógrafo {current_user['id']} intentó actualizar usuario {id} que no le pertenece")
+                    print(
+                        f"❌ Fotógrafo {current_user['id']} intentó actualizar usuario {id} que no le pertenece"
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Solo puedes actualizar tus propios clientes"
+                        detail="Solo puedes actualizar tus propios clientes",
                     )
                 print(f"✅ Fotógrafo {current_user['id']} actualizando su cliente {id}")
-            
+
             else:
                 # Los clientes no pueden actualizar usuarios
-                print(f"❌ Cliente {current_user['id']} intentó actualizar usuario {id}")
+                print(
+                    f"❌ Cliente {current_user['id']} intentó actualizar usuario {id}"
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Los clientes no tienen permiso para actualizar usuarios"
+                    detail="Los clientes no tienen permiso para actualizar usuarios",
                 )
 
-
-            '''# Verificamos si existe el usuario
+            """# Verificamos si existe el usuario
             existing_user = db.execute(users.select().where(users.c.id == id)).first()
             if not existing_user:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Usuario con id {id} no encontrado",
                 )
-            '''
-            
-             # Preparamos los datos actualizados (Solo incluye campos proporcionados)
+            """
+
+            # Preparamos los datos actualizados (Solo incluye campos proporcionados)
             update_data = user_update.model_dump(exclude_unset=True)
 
             # Encriptamos la contraseña si se proporciona
