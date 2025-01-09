@@ -56,6 +56,10 @@ async def create_gallery(
         new_gallery = gallery.model_dump()
         new_gallery["photographer_id"] = current_user["id"]
 
+        # Si client_id es 0, establecerlo como None para que se guarde como NULL
+        if new_gallery.get("client_id") == 0:
+            new_gallery["client_id"] = None
+
         with get_db() as db:
             result = db.execute(galleries.insert().values(new_gallery))
 
@@ -350,7 +354,7 @@ async def delete_gallery(id: int, current_user=Depends(get_current_user)):
         403: {"description": "No tienes permiso para acceder a esta galería"},
         404: {"description": "Galería o foto no encontrada"},
         500: {"description": "Error interno del servidor"}
-    }
+    },
     status_code=status.HTTP_200_OK,
     summary="Marcar/desmarcar foto como seleccionada",
     description="Permite a un cliente marcar o desmarcar una foto como seleccionada para el álbum"
