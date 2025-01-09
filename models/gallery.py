@@ -10,7 +10,7 @@ galleries = Table(
     Column("name", String(255)),
     Column("description", Text),    
     Column("photographer_id", Integer, ForeignKey("users.id")), # Relación con el fotógrafo
-    Column("client_id", Integer, ForeignKey("users.id")),       # Relación con el cliente
+    Column("client_id", Integer, ForeignKey("users.id"), nullable=True),       # Relación con el cliente
     
 )
 

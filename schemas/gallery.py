@@ -8,7 +8,7 @@ from typing import Optional, List
 class GalleryBase(BaseModel):
     name: str  # Nombre de la galería (requerido)
     description: Optional[str] = None  # Descripción opcional de la galería
-    client_id: int  # ID del cliente al que pertenece la galería (requerido)
+    client_id: Optional[int] = None  # ID del cliente opcional, puede ser None y ser asignado más tarde
 
 
 # Modelo para crear nuevas galerías
